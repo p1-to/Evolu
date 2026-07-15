@@ -1,12 +1,34 @@
+/**
+ * Evolu - Main Stylesheet
+ * @description ダークテーマ基調のUI/UX定義。レスポンシブ対応。
+ */
+
 /* =================================================================
-   基本設定（ダークモード基調 + グラデーション）
+   CSS Variables (テーマ設定)
+   保守性を高めるため、主要なカラーコードを変数化
+   ================================================================= */
+:root {
+    --bg-main: #1a1a1a;
+    --bg-gradient-top: #333333;
+    --text-main: #e0e0e0;
+    --text-sub: #c0c0c0;
+    --accent-blue: #88aaff;
+    --accent-green: #a8e063;
+    --danger-red: #dc3545;
+    --glass-bg: rgba(40, 40, 40, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --shadow-main: 0 10px 40px rgba(0, 0, 0, 0.6);
+}
+
+/* =================================================================
+   Base Settings (基本設定)
    ================================================================= */
 body {
     font-family: 'Inter', 'Noto Sans JP', sans-serif;
-    background-color: #1a1a1a;
-    background-image: radial-gradient(circle at 50% 0%, #333333 0%, #1a1a1a 80%);
-    background-attachment: fixed; /* 背景固定 */
-    color: #e0e0e0;
+    background-color: var(--bg-main);
+    background-image: radial-gradient(circle at 50% 0%, var(--bg-gradient-top) 0%, var(--bg-main) 80%);
+    background-attachment: fixed;
+    color: var(--text-main);
     margin: 0;
     padding: 0;
     box-sizing: border-box;
@@ -27,7 +49,7 @@ h1 {
 
 p {
     font-size: 1em;
-    color: #c0c0c0;
+    color: var(--text-sub);
     margin-bottom: 1.5em;
     text-align: center;
 }
@@ -43,24 +65,44 @@ p {
 }
 
 /* =================================================================
-   スライドショーカード
+   Components: Glassmorphism Cards (グラスモーフィズム・カード)
    ================================================================= */
-.slideshow-container {
-    background-color: rgba(40, 40, 40, 0.7);
+.slideshow-container, .controls, .record-form {
+    background-color: var(--glass-bg);
     backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--glass-border);
     border-radius: 20px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
-    padding: 25px;
-    margin-bottom: 30px;
+    box-shadow: var(--shadow-main);
     width: 100%;
-    max-width: 500px;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
     align-items: center;
 }
 
+.slideshow-container {
+    max-width: 500px;
+    padding: 25px;
+    margin-bottom: 30px;
+}
+
+.controls {
+    max-width: 500px;
+    padding: 25px;
+    margin-bottom: 40px;
+    gap: 20px;
+}
+
+.record-form {
+    max-width: 600px;
+    width: 90%;
+    margin: 0 auto 60px auto;
+    padding: 30px;
+}
+
+/* =================================================================
+   Components: Image & Details (画像と詳細情報)
+   ================================================================= */
 #mainImage {
     width: 100%;
     height: 350px;
@@ -80,7 +122,7 @@ p {
 #recordDate {
     font-size: 1.2em;
     font-weight: 700;
-    color: #88aaff; /* 青アクセント */
+    color: var(--accent-blue);
     margin: 0 0 5px 0;
     letter-spacing: 0.05em;
 }
@@ -95,26 +137,24 @@ p {
 }
 
 /* =================================================================
-   コントロールパネル
+   Components: Buttons & Controls (ボタン類)
    ================================================================= */
-.controls {
-    background-color: rgba(40, 40, 40, 0.7);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 20px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
-    width: 100%;
-    max-width: 500px;
-    padding: 25px;
-    margin-bottom: 40px;
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 20px;
+button {
+    border: none;
+    border-radius: 8px;
+    padding: 12px 20px;
+    font-size: 1em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
 }
 
-/* 時間設定エリア */
+button:active {
+    transform: scale(0.95);
+}
+
+/* Settings Group */
 .setting-group {
     display: flex;
     justify-content: center;
@@ -123,7 +163,7 @@ p {
     flex-wrap: wrap;
     background: rgba(0,0,0,0.2);
     padding: 10px 15px;
-    border-radius: 50px; /* カプセル型 */
+    border-radius: 50px;
 }
 
 .setting-group label {
@@ -142,23 +182,6 @@ p {
     font-weight: bold;
 }
 
-/* ボタン共通設定 */
-button {
-    border: none;
-    border-radius: 8px;
-    padding: 12px 20px;
-    font-size: 1em;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-}
-
-button:active {
-    transform: scale(0.95);
-}
-
-/* 小さい調整ボタン */
 .step-button {
     background-color: #555;
     color: #fff;
@@ -166,11 +189,10 @@ button:active {
     font-size: 0.8em;
     border-radius: 6px;
 }
-.step-button:hover {
-    background-color: #666;
-}
 
-/* メイン操作ボタン群 */
+.step-button:hover { background-color: #666; }
+
+/* Main Navigation */
 .main-controls {
     display: flex;
     align-items: center;
@@ -179,21 +201,21 @@ button:active {
     width: 100%;
 }
 
-/* 前へ・次へボタン */
 #prevButton, #nextButton {
     background: linear-gradient(135deg, #ff9a8d, #ff6a88);
     color: white;
     flex-grow: 1;
     max-width: 120px;
 }
+
 #prevButton:hover, #nextButton:hover {
     filter: brightness(1.1);
     transform: translateY(-2px);
 }
 
-/* 再生・停止ボタン（円形） */
+/* Play/Pause Toggle */
 .play-button {
-    background: linear-gradient(135deg, #a8e063, #56ab2f) !important;
+    background: linear-gradient(135deg, var(--accent-green), #56ab2f) !important;
     color: #fff !important;
     border: 3px solid rgba(255,255,255,0.2) !important;
     width: 70px !important;
@@ -208,22 +230,22 @@ button:active {
     flex-shrink: 0 !important;
     box-shadow: 0 0 20px rgba(86, 171, 47, 0.4);
 }
+
 .play-button:hover {
     transform: scale(1.1);
     box-shadow: 0 0 30px rgba(86, 171, 47, 0.6);
 }
 
-/* 停止中スタイル */
 .pause-button {
-    background: linear-gradient(135deg, #4facfe, #00f2fe) !important; /* 水色系 */
+    background: linear-gradient(135deg, #4facfe, #00f2fe) !important;
     box-shadow: 0 0 20px rgba(79, 172, 254, 0.4);
 }
 
-/* 削除ボタン */
+/* Action Buttons */
 .delete-button {
     background: transparent !important;
-    border: 2px solid #dc3545 !important;
-    color: #dc3545 !important;
+    border: 2px solid var(--danger-red) !important;
+    color: var(--danger-red) !important;
     width: 50px;
     height: 50px;
     border-radius: 50%;
@@ -233,28 +255,50 @@ button:active {
     align-items: center;
     margin-top: 10px;
 }
+
 .delete-button:hover {
-    background: #dc3545 !important;
+    background: var(--danger-red) !important;
     color: white !important;
     box-shadow: 0 0 15px rgba(220, 53, 69, 0.6);
 }
 
-/* =================================================================
-   入力フォーム
-   ================================================================= */
-.record-form {
-    background-color: rgba(40, 40, 40, 0.7);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 20px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
-    max-width: 600px;
-    width: 90%;
-    margin: 0 auto 60px auto;
-    padding: 30px;
-    box-sizing: border-box;
+.save-button {
+    width: 100%;
+    background: linear-gradient(135deg, #11998e, #38ef7d);
+    color: white;
+    font-size: 1.1em;
+    font-weight: 700;
+    padding: 15px;
+    margin-top: 10px;
 }
 
+.save-button:hover {
+    filter: brightness(1.1);
+    box-shadow: 0 0 20px rgba(56, 239, 125, 0.4);
+}
+
+.delete-all-button {
+    background: transparent;
+    border: 1px solid #555;
+    color: #888;
+    margin-top: 20px;
+    font-size: 0.8em;
+    padding: 8px 15px;
+    border-radius: 20px;
+    width: auto;
+    transition: all 0.3s;
+}
+
+.delete-all-button:hover {
+    border-color: var(--danger-red);
+    color: var(--danger-red);
+    background: rgba(220, 53, 69, 0.1);
+    box-shadow: 0 0 10px rgba(220, 53, 69, 0.2);
+}
+
+/* =================================================================
+   Forms (入力フォーム)
+   ================================================================= */
 .record-form h2 {
     text-align: center;
     margin-top: 0;
@@ -274,20 +318,17 @@ button:active {
     font-weight: 500;
 }
 
-/* 入力フィールドの共通設定 */
 .form-group input,
 .form-group textarea {
     width: 100%;
     padding: 15px;
     background-color: #2a2a2a;
-    border: 1px solid #555; /* 通常時の枠線 */
+    border: 1px solid #555;
     border-radius: 10px;
     color: #fff;
     font-size: 1em;
     box-sizing: border-box;
-    outline: none; /* デフォルトのアウトラインを消す */
-    
-    /* ↓↓↓ 光らせるための準備（アニメーション） ↓↓↓ */
+    outline: none;
     transition: all 0.3s ease; 
 }
 
@@ -296,96 +337,32 @@ button:active {
     background-color: #333;
 }
 
-/* 日付ピッカーの色調整 */
 input[type="date"] {
     color-scheme: dark;
 }
 
-/* テキストエリア */
 textarea {
     resize: vertical;
 }
 
-/* 保存ボタン */
-.save-button {
-    width: 100%;
-    background: linear-gradient(135deg, #11998e, #38ef7d); /* 緑グラデ */
-    color: white;
-    font-size: 1.1em;
-    font-weight: 700;
-    padding: 15px;
-    margin-top: 10px;
-}
-.save-button:hover {
-    filter: brightness(1.1);
-    box-shadow: 0 0 20px rgba(56, 239, 125, 0.4);
-}
-
-/* =================================================================
-   === フォーカス時の発光設定（修正箇所） ===
-   ================================================================= */
-
-/* ID指定で確実に光らせる */
+/* Focus Effects */
 #dateInput:focus,
 #memoInput:focus,
 #imageInput:focus,
 #timeInput:focus {
-    /* 枠線を明るい緑色に */
-    border-color: #a8e063 !important; 
-    
-    /* 背景を少し明るくして入力しやすく */
+    border-color: var(--accent-green) !important; 
     background-color: #333 !important; 
-    
-    /* 強い光彩（グロー効果） */
-    box-shadow: 0 0 15px rgba(168, 224, 99, 0.6), 
-                0 0 5px rgba(168, 224, 99, 0.8) !important;
-    
-    /* 拡大などはせず、色と光で強調 */
+    box-shadow: 0 0 15px rgba(168, 224, 99, 0.6), 0 0 5px rgba(168, 224, 99, 0.8) !important;
 }
 
 /* =================================================================
-   スマホ対応 (レスポンシブ)
+   Fullscreen Mode (全画面表示)
    ================================================================= */
-@media (max-width: 600px) {
-    h1 { font-size: 2em; }
-    .container, .record-form { width: 95%; padding: 15px; }
-    #mainImage { height: 250px; }
-    .main-controls { gap: 10px; }
-    
-    /* スマホではボタンを縦積みにしない（押しやすさ重視で横並び維持） */
-    /* ただし、あまりに狭い場合は調整 */
-}
-/* 全削除ボタン */
-.delete-all-button {
-    background: transparent;
-    border: 1px solid #555;
-    color: #888;
-    margin-top: 20px;
-    font-size: 0.8em;
-    padding: 8px 15px;
-    border-radius: 20px;
-    width: auto; /* 幅を自動調整 */
-    transition: all 0.3s;
-}
-
-.delete-all-button:hover {
-    border-color: #dc3545;
-    color: #dc3545;
-    background: rgba(220, 53, 69, 0.1);
-    box-shadow: 0 0 10px rgba(220, 53, 69, 0.2);
-}
-
-/* =================================================================
-   全画面表示モード用のスタイル
-   ================================================================= */
-
-/* 全画面モード時、bodyの背景を真っ黒にする */
 body.fullscreen-mode {
     background: #000 !important;
-    justify-content: center; /* 上下中央寄せ */
+    justify-content: center;
 }
 
-/* 全画面モード時、スライドショー以外の要素を隠す */
 body.fullscreen-mode header,
 body.fullscreen-mode .controls,
 body.fullscreen-mode .record-form,
@@ -394,7 +371,6 @@ body.fullscreen-mode .delete-button {
     display: none !important;
 }
 
-/* スライドショーコンテナを画面いっぱいに広げる */
 body.fullscreen-mode .slideshow-container {
     width: 100vw;
     height: 100vh;
@@ -408,57 +384,62 @@ body.fullscreen-mode .slideshow-container {
     padding: 0;
 }
 
-/* 画像を画面に合わせる */
 body.fullscreen-mode #mainImage {
-    height: 85vh; /* 画面の85%の高さ */
+    height: 85vh;
     width: 100%;
     border: none;
     background: #000;
 }
 
-/* 文字情報を少し大きく、下部に配置 */
 body.fullscreen-mode .record-details {
     position: absolute;
     bottom: 30px;
     width: 100%;
     text-shadow: 0 2px 4px rgba(0,0,0,0.8);
 }
+
 body.fullscreen-mode #recordDate {
     font-size: 1.5em;
     color: #fff;
 }
+
 body.fullscreen-mode #recordMemo {
     font-size: 1.2em;
     color: #ddd;
 }
 
-/* 戻るボタン（全画面解除用） */
 #exitFullscreenBtn {
-    display: none; /* 通常時は非表示（display:noneのまま） */
+    display: none; 
     position: fixed;
     top: 20px;
     right: 20px;
-    background: rgba(0, 0, 0, 0.5); /* 背景を少し黒くして見やすく */
+    background: rgba(0, 0, 0, 0.5);
     color: #fff;
     border: 1px solid rgba(255,255,255,0.4);
     padding: 8px 15px;
     border-radius: 30px;
     z-index: 9999;
     backdrop-filter: blur(5px);
-    
-    /* ↓↓↓ アニメーション設定（ここが重要） ↓↓↓ */
-    opacity: 1; /* 見えている状態 */
-    transition: opacity 0.5s ease; /* 0.5秒かけてふわっと消える */
+    opacity: 1; 
+    transition: opacity 0.5s ease;
     cursor: pointer;
 }
 
-/* 全画面モードの時だけ表示（display:block）にする */
 body.fullscreen-mode #exitFullscreenBtn {
     display: block;
 }
 
-/* このクラスがつくと、透明になって見えなくなる */
 #exitFullscreenBtn.hidden {
     opacity: 0;
-    pointer-events: none; /* 見えてない時に誤タップしないようにする */
+    pointer-events: none;
+}
+
+/* =================================================================
+   Media Queries (レスポンシブ)
+   ================================================================= */
+@media (max-width: 600px) {
+    h1 { font-size: 2em; }
+    .container, .record-form { width: 95%; padding: 15px; }
+    #mainImage { height: 250px; }
+    .main-controls { gap: 10px; }
 }
