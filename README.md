@@ -26,14 +26,14 @@ https://evolu-rec.vercel.app
 1. **完全なローカル完結型アーキテクチャ**
    パーソナルな写真（体型の変化、肌荒れの改善過程、植物の成長記録など）を扱うアプリであるため、情報漏洩リスクをゼロにするアーキテクチャを選択しました。BaaS（Firebase等）は使用せず、Web標準のNoSQLデータベースである`IndexedDB`を採用しています。
 2. **Vanilla JSによるDOM操作と状態管理**
-   フレームワーク（React等）に頼らず、ネイティブなJavaScriptのみで要件を実現することで、ブラウザのレンダリングの仕組みやイベントループ、非同期処理（Promise/async-await）への深い理解を目指しました。
+   フレームワーク（React等）に頼らず、ネイティブなJavaScriptのみで要件を実現しました。実装には生成AIを活用しましたが、DOM操作や非同期処理（Promise/async-await）の挙動を確かめながら進めることで、ブラウザの仕組みへの理解を深めることを意識しました。
 3. **ネイティブアプリに近いUXの提供**
    `manifest.json`による表示モードの制御と、`Service Worker`によるリソースのキャッシュ管理により、Webアプリでありながらシームレスな起動と動作を実現しています。
 
 ## ローカルでの実行方法
 1. 本リポジトリをクローンします。
-   `git clone https://github.com/あなたのユーザー名/リポジトリ名.git`
+   `git clone https://github.com/p1-to/Evolu.git`
 2. プロジェクトディレクトリに移動します。
-   `cd リポジトリ名`
+   `cd Evolu`
 3. 拡張機能「Live Server」等を使用して `index.html` をローカルサーバーで起動してください。
    （※IndexedDBやService Workerの仕様上、`file://`プロトコルではなく`http://localhost`または`http://127.0.0.1`環境での実行が必要です）
