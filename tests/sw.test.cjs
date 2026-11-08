@@ -55,21 +55,21 @@ const get = (path, extra = {}) => ({ request: { url: path.startsWith('http') ? p
   stores.set('evolu-v1', new Map([[ORIGIN + '/script.js', res('OLD')]]));
   await fire('install');
   assert.ok(sandbox.skipped, 'skipWaiting');
-  assert.ok(stores.get('evolu-v2').has(ORIGIN + '/vendor/mediabunny.min.mjs'));
+  assert.ok(stores.get('evolu-v3').has(ORIGIN + '/vendor/mediabunny.min.mjs'));
   await fire('activate');
-  assert.deepEqual([...stores.keys()], ['evolu-v2'], '古いキャッシュ削除');
+  assert.deepEqual([...stores.keys()], ['evolu-v3'], '古いキャッシュ削除');
   assert.ok(sandbox.claimed, 'claim');
 
   // 更新が届く: オンラインならキャッシュより新しい内容
-  stores.get('evolu-v2').set(ORIGIN + '/script.js', res('STALE'));
+  stores.get('evolu-v3').set(ORIGIN + '/script.js', res('STALE'));
   let r = await fire('fetch', get('/script.js'));
   assert.equal(r.value.body, 'fresh:' + ORIGIN + '/script.js');
   await new Promise((f) => setTimeout(f, 10));
-  assert.equal(stores.get('evolu-v2').get(ORIGIN + '/script.js').body, 'fresh:' + ORIGIN + '/script.js', 'キャッシュ更新');
+  assert.equal(stores.get('evolu-v3').get(ORIGIN + '/script.js').body, 'fresh:' + ORIGIN + '/script.js', 'キャッシュ更新');
 
   // オフライン: キャッシュで動く
   mode = 'offline';
-  stores.get('evolu-v2').set(ORIGIN + '/script.js', res('CACHED'));
+  stores.get('evolu-v3').set(ORIGIN + '/script.js', res('CACHED'));
   r = await fire('fetch', get('/script.js'));
   assert.equal(r.value.body, 'CACHED');
   // オフラインの未キャッシュ画面遷移は index.html へ
