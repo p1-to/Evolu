@@ -206,6 +206,8 @@ button:active {
     color: white;
     flex-grow: 1;
     max-width: 120px;
+    padding: 12px 8px;
+    white-space: nowrap;
 }
 
 #prevButton:hover, #nextButton:hover {
@@ -294,6 +296,143 @@ button:active {
     color: var(--danger-red);
     background: rgba(220, 53, 69, 0.1);
     box-shadow: 0 0 10px rgba(220, 53, 69, 0.2);
+}
+
+.icon {
+    width: 1.2em;
+    height: 1.2em;
+    fill: currentColor;
+    display: block;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+.create-video-button {
+    width: 100%;
+    background: linear-gradient(135deg, #4facfe, #7f7bff);
+    color: #fff;
+    font-size: 1.1em;
+    font-weight: 700;
+    padding: 15px;
+}
+
+.create-video-button:hover {
+    filter: brightness(1.1);
+}
+
+.data-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+}
+
+.data-actions .delete-all-button {
+    margin-top: 0;
+}
+
+.data-actions .delete-all-button:hover {
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+    background: rgba(136, 170, 255, 0.1);
+    box-shadow: none;
+}
+
+/* =================================================================
+   Video Dialog (動画作成ダイアログ)
+   ================================================================= */
+.video-dialog {
+    width: min(480px, calc(100vw - 32px));
+    max-height: calc(100dvh - 32px);
+    box-sizing: border-box;
+    overflow-y: auto;
+    background: #262626;
+    color: var(--text-main);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    box-shadow: var(--shadow-main);
+    padding: 24px;
+}
+
+.video-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.video-dialog h2 {
+    margin: 0 0 20px;
+    text-align: center;
+    color: #f0f0f0;
+    font-size: 1.3em;
+}
+
+.video-dialog select {
+    width: 100%;
+    padding: 15px;
+    background-color: #2a2a2a;
+    border: 1px solid #555;
+    border-radius: 10px;
+    color: #fff;
+    font-size: 1em;
+    box-sizing: border-box;
+}
+
+.check-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    color: #ccc;
+    cursor: pointer;
+}
+
+.check-row input {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    accent-color: var(--accent-green);
+}
+
+.video-note {
+    font-size: 0.85em;
+    margin: 12px 0;
+    color: #aaa;
+}
+
+.dialog-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.dialog-actions .save-button {
+    margin-top: 0;
+    flex: 1;
+}
+
+.secondary-button {
+    background: #444;
+    color: #fff;
+}
+
+.secondary-button:hover {
+    background: #555;
+}
+
+#videoProgressBar {
+    width: 100%;
+    height: 12px;
+    accent-color: var(--accent-green);
+}
+
+#videoPreview {
+    display: block;
+    width: 100%;
+    max-height: 55dvh;
+    background: #000;
+    border-radius: 12px;
 }
 
 /* =================================================================

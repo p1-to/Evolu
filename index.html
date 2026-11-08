@@ -8,8 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    
+
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#1a1a1a">
@@ -41,23 +40,31 @@
 
             <div class="main-controls">
                 <button id="prevButton">＜ 前へ</button>
-                <button id="playPauseButton" class="play-button">
-                    <i class="fas fa-play"></i>
+                <button id="playPauseButton" class="play-button" aria-label="再生 / 一時停止">
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
                 </button>
                 <button id="nextButton">次へ ＞</button>
             </div>
-            
-            <button id="deleteButton" class="delete-button" title="現在の記録を削除">
-                <i class="fas fa-trash-alt"></i>
+
+            <button id="createVideoButton" class="create-video-button" type="button">動画を作成</button>
+
+            <button id="deleteButton" class="delete-button" title="現在の記録を削除" aria-label="現在の記録を削除">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4zM6 9h12l-1 12H7z"/></svg>
             </button>
-            
+
+            <div class="data-actions">
+                <button id="backupButton" class="delete-all-button" type="button">バックアップを保存</button>
+                <button id="restoreButton" class="delete-all-button" type="button">バックアップから復元</button>
+                <input type="file" id="restoreInput" accept=".zip,application/zip" hidden>
+            </div>
+
             <button id="deleteAllButton" class="delete-all-button">
                 全データを削除
             </button>
         </div>
 
         <form id="recordForm" class="record-form">
-            <h2><i class="fas fa-pen"></i> 経過を記録</h2>
+            <h2>経過を記録</h2>
             
             <div class="form-group">
                 <label for="dateInput">日付</label>
@@ -76,15 +83,63 @@
             
             <button type="submit" class="save-button">保存する</button>
         </form>
-    </div> <script src="script.js"></script>
+    </div>
+
+    <dialog id="videoDialog" class="video-dialog" aria-labelledby="videoDialogTitle">
+        <h2 id="videoDialogTitle">動画を作成</h2>
+
+        <div id="videoOptionsView">
+            <div class="form-group">
+                <label for="videoFormat">形式</label>
+                <select id="videoFormat">
+                    <option value="portrait">縦 9:16（リール・TikTok）</option>
+                    <option value="square">正方形 1:1（Instagram投稿）</option>
+                    <option value="landscape">横 16:9（YouTube）</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="videoSeconds">1枚あたりの秒数</label>
+                <input type="number" id="videoSeconds" min="0.1" max="10" step="0.1" value="1.0">
+            </div>
+            <label class="check-row"><input type="checkbox" id="videoCaptions" checked> 日付・経過日数・メモを入れる</label>
+            <label class="check-row"><input type="checkbox" id="videoEnding" checked> 最後にビフォー/アフターを入れる</label>
+            <label class="check-row"><input type="checkbox" id="videoWatermark" checked> 「Evolu」のロゴを入れる</label>
+            <p id="videoSummary" class="video-note"></p>
+            <p class="video-note">動画は端末内で作成され、写真が外部に送られることはありません。</p>
+            <div class="dialog-actions">
+                <button id="videoCloseButton" class="secondary-button" type="button">閉じる</button>
+                <button id="videoStartButton" class="save-button" type="button">作成する</button>
+            </div>
+        </div>
+
+        <div id="videoProgressView" hidden>
+            <progress id="videoProgressBar" max="1" value="0"></progress>
+            <p id="videoProgressText" class="video-note">準備中…</p>
+            <div class="dialog-actions">
+                <button id="videoCancelButton" class="secondary-button" type="button">キャンセル</button>
+            </div>
+        </div>
+
+        <div id="videoResultView" hidden>
+            <video id="videoPreview" controls playsinline muted></video>
+            <p id="videoResultNote" class="video-note"></p>
+            <button id="videoSaveButton" class="save-button" type="button">動画を保存</button>
+            <div class="dialog-actions">
+                <button id="videoRetryButton" class="secondary-button" type="button">設定を変える</button>
+                <button id="videoDoneButton" class="secondary-button" type="button">閉じる</button>
+            </div>
+        </div>
+    </dialog>
+
+    <script src="exif.js"></script>
+    <script src="backup.js"></script>
+    <script src="video.js"></script>
+    <script src="script.js"></script>
     
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
           navigator.serviceWorker.register('./sw.js')
-            .then(function(registration) {
-              console.info('ServiceWorker registration successful with scope: ', registration.scope);
-            })
             .catch(function(err) {
               console.error('ServiceWorker registration failed: ', err);
             });
