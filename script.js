@@ -195,78 +195,202 @@ function requestPersistentStorage() {
     }
 }
 
+function putRecordToDB(record) {
+    return runStoreRequest('readwrite', (store) => store.put(record));
+}
+
+/**
+ * サムネイルだけを追記する。保存の直前にDBの最新の記録を読み直すので、
+ * 作成中に日付やメモが編集されても上書きしない。
+ */
+function saveThumbnailToDB(id, thumb) {
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction(['records'], 'readwrite');
+        const store = transaction.objectStore('records');
+        const request = store.get(id);
+        request.onsuccess = () => {
+            if (request.result) store.put({ ...request.result, thumb });
+        };
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
+    });
+}
+
+/** 2つの日付（YYYY-MM-DD）の差を日数で返す */
+function daysBetween(fromDate, toDate) {
+    return Math.round((Date.parse(toDate) - Date.parse(fromDate)) / 86400000);
+}
+
+function isTypingTarget(element) {
+    return element && (element.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(element.tagName));
+}
+
 const ICON_PLAY = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
 const ICON_PAUSE = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
 
 // =================================================================
-// 4. Main Initialization & UI Controllers (初期化・UI制御)
+// 4. Thumbnails (サムネイル)
+// 一覧用の小さな画像を一度だけ作り、記録と一緒に保存しておく。
+// 元の写真を一覧で何枚も読み込むと、スマホではメモリが足りなくなるため。
 // =================================================================
-window.onload = async function() { 
+const THUMB_SIZE = 160;
+const thumbUrls = new Map(); // record.id -> object URL
+const thumbJobs = new Map(); // record.id -> Promise
+let thumbQueue = Promise.resolve();
 
-    // DOM要素のキャッシュ
+function loadImageElement(source) {
+    return new Promise((resolve) => {
+        const isBlob = typeof source !== 'string';
+        const src = isBlob ? URL.createObjectURL(source) : source;
+        const img = new Image();
+        img.onload = () => { if (isBlob) URL.revokeObjectURL(src); resolve(img); };
+        img.onerror = () => { if (isBlob) URL.revokeObjectURL(src); resolve(null); };
+        img.src = src;
+    });
+}
+
+async function createThumbnail(source) {
+    const img = await loadImageElement(source);
+    if (!img) return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = THUMB_SIZE;
+    canvas.height = THUMB_SIZE;
+    const ctx = canvas.getContext('2d');
+    const scale = Math.max(THUMB_SIZE / img.naturalWidth, THUMB_SIZE / img.naturalHeight);
+    const w = img.naturalWidth * scale;
+    const h = img.naturalHeight * scale;
+    ctx.drawImage(img, (THUMB_SIZE - w) / 2, (THUMB_SIZE - h) / 2, w, h);
+    img.src = '';
+    return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+}
+
+/** サムネイルのURLを返す。未作成なら順番に作る（同時に大量の写真をデコードしない） */
+function getThumbnailUrl(record) {
+    if (thumbUrls.has(record.id)) return Promise.resolve(thumbUrls.get(record.id));
+    if (thumbJobs.has(record.id)) return thumbJobs.get(record.id);
+
+    const job = thumbQueue.then(async () => {
+        let thumb = record.thumb;
+        if (!thumb) {
+            thumb = await createThumbnail(record.image);
+            if (!thumb) return null;
+            record.thumb = thumb;
+            saveThumbnailToDB(record.id, thumb).catch((error) => console.warn('Thumbnail save failed:', error));
+        }
+        const url = URL.createObjectURL(thumb);
+        thumbUrls.set(record.id, url);
+        return url;
+    }).catch((error) => {
+        console.warn('Thumbnail failed:', error);
+        return null;
+    }).finally(() => thumbJobs.delete(record.id));
+
+    thumbQueue = job;
+    thumbJobs.set(record.id, job);
+    return job;
+}
+
+function releaseThumbnail(id) {
+    const url = thumbUrls.get(id);
+    if (url) URL.revokeObjectURL(url);
+    thumbUrls.delete(id);
+}
+
+// =================================================================
+// 5. Main Initialization & UI Controllers (初期化・UI制御)
+// =================================================================
+window.onload = async function() {
+
+    const $ = (id) => document.getElementById(id);
     const DOM = {
-        mainImage: document.getElementById('mainImage'),
-        recordDate: document.getElementById('recordDate'),
-        recordMemo: document.getElementById('recordMemo'),
-        prevButton: document.getElementById('prevButton'),
-        nextButton: document.getElementById('nextButton'),
-        deleteButton: document.getElementById('deleteButton'),
-        deleteAllButton: document.getElementById('deleteAllButton'),
-        playPauseButton: document.getElementById('playPauseButton'),
-        timeInput: document.getElementById('timeInput'),
-        plus05sButton: document.getElementById('plus05sButton'),
-        minus05sButton: document.getElementById('minus05sButton'),
-        recordForm: document.getElementById('recordForm'),
-        dateInput: document.getElementById('dateInput'),
-        memoInput: document.getElementById('memoInput'),
-        imageInput: document.getElementById('imageInput'),
-        exitFullscreenBtn: document.getElementById('exitFullscreenBtn'),
-        createVideoButton: document.getElementById('createVideoButton'),
-        backupButton: document.getElementById('backupButton'),
-        restoreButton: document.getElementById('restoreButton'),
-        restoreInput: document.getElementById('restoreInput'),
-        videoDialog: document.getElementById('videoDialog'),
-        videoOptionsView: document.getElementById('videoOptionsView'),
-        videoProgressView: document.getElementById('videoProgressView'),
-        videoResultView: document.getElementById('videoResultView'),
-        videoFormat: document.getElementById('videoFormat'),
-        videoSeconds: document.getElementById('videoSeconds'),
-        videoCaptions: document.getElementById('videoCaptions'),
-        videoEnding: document.getElementById('videoEnding'),
-        videoWatermark: document.getElementById('videoWatermark'),
-        videoSummary: document.getElementById('videoSummary'),
-        videoStartButton: document.getElementById('videoStartButton'),
-        videoCloseButton: document.getElementById('videoCloseButton'),
-        videoCancelButton: document.getElementById('videoCancelButton'),
-        videoProgressBar: document.getElementById('videoProgressBar'),
-        videoProgressText: document.getElementById('videoProgressText'),
-        videoPreview: document.getElementById('videoPreview'),
-        videoResultNote: document.getElementById('videoResultNote'),
-        videoSaveButton: document.getElementById('videoSaveButton'),
-        videoRetryButton: document.getElementById('videoRetryButton'),
-        videoDoneButton: document.getElementById('videoDoneButton')
+        emptyState: $('emptyState'),
+        viewerSection: $('viewerSection'),
+        sampleBanner: $('sampleBanner'),
+        stage: $('stage'),
+        mainImage: $('mainImage'),
+        counter: $('counter'),
+        recordDate: $('recordDate'),
+        recordDay: $('recordDay'),
+        recordMemo: $('recordMemo'),
+        editButton: $('editButton'),
+        prevButton: $('prevButton'),
+        nextButton: $('nextButton'),
+        playPauseButton: $('playPauseButton'),
+        timeInput: $('timeInput'),
+        thumbStrip: $('thumbStrip'),
+        exitFullscreenBtn: $('exitFullscreenBtn'),
+        imageInput: $('imageInput'),
+        addDialog: $('addDialog'),
+        addPreview: $('addPreview'),
+        recordForm: $('recordForm'),
+        dateGroup: $('dateGroup'),
+        multiDateNote: $('multiDateNote'),
+        dateInput: $('dateInput'),
+        memoInput: $('memoInput'),
+        addSaveButton: $('addSaveButton'),
+        addCancelButton: $('addCancelButton'),
+        editDialog: $('editDialog'),
+        editForm: $('editForm'),
+        editDateInput: $('editDateInput'),
+        editMemoInput: $('editMemoInput'),
+        editCancelButton: $('editCancelButton'),
+        deleteButton: $('deleteButton'),
+        menuButton: $('menuButton'),
+        menuDialog: $('menuDialog'),
+        menuCloseButton: $('menuCloseButton'),
+        menuSampleButton: $('menuSampleButton'),
+        sampleButton: $('sampleButton'),
+        removeSampleButton: $('removeSampleButton'),
+        deleteAllButton: $('deleteAllButton'),
+        backupButton: $('backupButton'),
+        restoreButton: $('restoreButton'),
+        restoreInput: $('restoreInput'),
+        createVideoButton: $('createVideoButton'),
+        videoDialog: $('videoDialog'),
+        videoOptionsView: $('videoOptionsView'),
+        videoProgressView: $('videoProgressView'),
+        videoResultView: $('videoResultView'),
+        videoFormat: $('videoFormat'),
+        videoSeconds: $('videoSeconds'),
+        videoCaptions: $('videoCaptions'),
+        videoEnding: $('videoEnding'),
+        videoWatermark: $('videoWatermark'),
+        videoSummary: $('videoSummary'),
+        videoStartButton: $('videoStartButton'),
+        videoCloseButton: $('videoCloseButton'),
+        videoCancelButton: $('videoCancelButton'),
+        videoProgressBar: $('videoProgressBar'),
+        videoProgressText: $('videoProgressText'),
+        videoPreview: $('videoPreview'),
+        videoResultNote: $('videoResultNote'),
+        videoSaveButton: $('videoSaveButton'),
+        videoRetryButton: $('videoRetryButton'),
+        videoDoneButton: $('videoDoneButton')
     };
 
     let displayedUrl = null;
 
-    DOM.dateInput.value = formatDate(new Date());
+    // -----------------------------------------------------------------
+    // 表示
+    // -----------------------------------------------------------------
 
-    // DB接続と初期データロード
-    try {
-        await openDB();
-        await migrateLegacyRecords((done, total) => {
-            DOM.recordMemo.textContent = `データを最適化しています… ${done} / ${total}`;
-        });
-        records = await getAllRecordsFromDB();
-        currentIndex = records.length > 0 ? records.length - 1 : 0;
+    /** 記録の追加・削除・並び替えのあとに呼ぶ */
+    function renderAll() {
+        const hasRecords = records.length > 0;
+        DOM.emptyState.hidden = hasRecords;
+        DOM.viewerSection.hidden = !hasRecords;
+        DOM.sampleBanner.hidden = !records.some((record) => record.sample);
+        DOM.menuSampleButton.hidden = records.some((record) => record.sample);
+        if (!hasRecords) {
+            stopSlideshow();
+            exitFullscreen();
+        }
+        renderStrip();
         updateDisplay();
-    } catch (error) {
-        alert('初期化エラー: ' + error);
     }
 
-    /**
-     * UIの更新処理
-     */
+    /** 今の1枚の表示を更新する */
     function updateDisplay() {
         const previousUrl = displayedUrl;
         displayedUrl = null;
@@ -274,79 +398,216 @@ window.onload = async function() {
         if (records.length === 0) {
             if (previousUrl) URL.revokeObjectURL(previousUrl);
             DOM.mainImage.removeAttribute('src');
-            DOM.mainImage.alt = 'No Data';
-            DOM.mainImage.style.opacity = '0.3'; 
-            DOM.recordDate.textContent = '---';
-            DOM.recordMemo.textContent = '記録がありません。新しく追加してください。';
-            return; 
+            return;
         }
-        
-        DOM.mainImage.style.opacity = '1';
 
-        // インデックスの境界チェック
         if (currentIndex >= records.length) currentIndex = records.length - 1;
         if (currentIndex < 0) currentIndex = 0;
-        
-        const currentRecord = records[currentIndex]; 
-        if (typeof currentRecord.image === 'string') {
-            DOM.mainImage.src = currentRecord.image; // 移行できなかった旧形式
+
+        const record = records[currentIndex];
+        if (typeof record.image === 'string') {
+            DOM.mainImage.src = record.image; // 移行できなかった旧形式
         } else {
-            displayedUrl = URL.createObjectURL(currentRecord.image);
+            displayedUrl = URL.createObjectURL(record.image);
             DOM.mainImage.src = displayedUrl;
         }
         if (previousUrl) URL.revokeObjectURL(previousUrl);
 
-        DOM.mainImage.alt = `${currentRecord.date} の記録`;
-        DOM.recordDate.textContent = currentRecord.date;
-        DOM.recordMemo.textContent = currentRecord.memo;
+        DOM.mainImage.alt = `${record.date} の記録`;
+        DOM.counter.textContent = `${currentIndex + 1} / ${records.length}`;
+        DOM.recordDate.textContent = record.date.replaceAll('-', '/');
+        DOM.recordDay.textContent = `${daysBetween(records[0].date, record.date) + 1}日目`;
+        DOM.recordMemo.textContent = record.memo || '';
+
+        const single = records.length < 2;
+        DOM.prevButton.disabled = single;
+        DOM.nextButton.disabled = single;
+        DOM.playPauseButton.disabled = single;
+
+        markActiveThumb();
     }
 
-    function showNextRecord() {
-        if (records.length === 0) return; 
-        currentIndex = (currentIndex + 1) % records.length;
+    const thumbObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            thumbObserver.unobserve(entry.target);
+            const record = records.find((r) => String(r.id) === entry.target.dataset.id);
+            if (!record) continue;
+            getThumbnailUrl(record).then((url) => {
+                const img = entry.target.querySelector('img');
+                if (url && img) img.src = url;
+            });
+        }
+    }, { root: DOM.thumbStrip, rootMargin: '0px 200px' });
+
+    function renderStrip() {
+        thumbObserver.disconnect();
+        const buttons = records.map((record, index) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'thumb';
+            button.dataset.index = String(index);
+            button.dataset.id = String(record.id);
+            button.setAttribute('aria-label', `${record.date} の記録を表示`);
+            const img = document.createElement('img');
+            img.alt = '';
+            const url = thumbUrls.get(record.id);
+            if (url) img.src = url;
+            button.append(img);
+            if (!url) thumbObserver.observe(button);
+            return button;
+        });
+        DOM.thumbStrip.replaceChildren(...buttons);
+    }
+
+    function markActiveThumb() {
+        let active = null;
+        for (const button of DOM.thumbStrip.children) {
+            const isActive = Number(button.dataset.index) === currentIndex;
+            button.classList.toggle('is-active', isActive);
+            if (isActive) {
+                button.setAttribute('aria-current', 'true');
+                active = button;
+            } else {
+                button.removeAttribute('aria-current');
+            }
+        }
+        // ページ全体は動かさず、一覧の横スクロールだけで今の1枚を中央に寄せる
+        if (active) {
+            DOM.thumbStrip.scrollLeft = active.offsetLeft - DOM.thumbStrip.clientWidth / 2 + active.clientWidth / 2;
+        }
+    }
+
+    function showAt(index) {
+        if (records.length === 0) return;
+        currentIndex = (index + records.length) % records.length;
         updateDisplay();
     }
 
+    // -----------------------------------------------------------------
+    // スライドショー
+    // -----------------------------------------------------------------
     function stopSlideshow() {
-        if (slideInterval !== null) {
-            clearInterval(slideInterval);
-            slideInterval = null;
-            DOM.playPauseButton.innerHTML = ICON_PLAY;
-            DOM.playPauseButton.classList.replace('pause-button', 'play-button');
-        }
+        if (slideInterval === null) return;
+        clearInterval(slideInterval);
+        slideInterval = null;
+        DOM.playPauseButton.innerHTML = ICON_PLAY;
+        DOM.playPauseButton.classList.remove('is-playing');
+        DOM.playPauseButton.setAttribute('aria-label', 'スライドショーを再生');
     }
 
     function startSlideshow() {
         if (records.length <= 1) return;
-        stopSlideshow(); 
-
+        stopSlideshow();
         const intervalTime = parseFloat(DOM.timeInput.value) * 1000;
-        if (intervalTime < 100 || isNaN(intervalTime)) {
-            alert('切り替え時間は0.1秒以上を指定してください。');
-            DOM.timeInput.value = '3.0'; 
-            return;
-        }
-
         DOM.playPauseButton.innerHTML = ICON_PAUSE;
-        DOM.playPauseButton.classList.replace('play-button', 'pause-button');
-        slideInterval = setInterval(showNextRecord, intervalTime); 
+        DOM.playPauseButton.classList.add('is-playing');
+        DOM.playPauseButton.setAttribute('aria-label', 'スライドショーを一時停止');
+        slideInterval = setInterval(() => showAt(currentIndex + 1), intervalTime);
     }
 
-    function updateTimeInput(change) {
-        let currentValue = parseFloat(DOM.timeInput.value);
-        let newValue = Math.max(0.1, currentValue + change); // 0.1未満にならないよう制御
-        DOM.timeInput.value = newValue.toFixed(1);
-    }
-
-    // =================================================================
-    // 5. Event Listeners (イベント登録)
-    // =================================================================
-
-    // 画像選択時に撮影日を自動取得（可能であれば）
-    DOM.imageInput.addEventListener('change', async (e) => {
-        const file = e.target.files && e.target.files[0];
-        if (file) DOM.dateInput.value = await detectPhotoDate(file);
+    DOM.playPauseButton.addEventListener('click', () => {
+        slideInterval === null ? startSlideshow() : stopSlideshow();
     });
+    DOM.timeInput.addEventListener('change', () => {
+        if (slideInterval !== null) startSlideshow(); // 再生中なら新しい速度で続ける
+    });
+    DOM.prevButton.addEventListener('click', () => { stopSlideshow(); showAt(currentIndex - 1); });
+    DOM.nextButton.addEventListener('click', () => { stopSlideshow(); showAt(currentIndex + 1); });
+    DOM.thumbStrip.addEventListener('click', (event) => {
+        const button = event.target.closest('.thumb');
+        if (!button) return;
+        stopSlideshow();
+        showAt(Number(button.dataset.index));
+    });
+
+    // -----------------------------------------------------------------
+    // 全画面とスワイプ
+    // -----------------------------------------------------------------
+    let hideButtonTimer = null;
+
+    function showButtonTemporarily() {
+        DOM.exitFullscreenBtn.classList.remove('hidden');
+        if (hideButtonTimer) clearTimeout(hideButtonTimer);
+        hideButtonTimer = setTimeout(() => DOM.exitFullscreenBtn.classList.add('hidden'), 3000);
+    }
+
+    function isFullscreen() {
+        return document.body.classList.contains('fullscreen-mode');
+    }
+
+    function enterFullscreen() {
+        if (records.length === 0) return;
+        document.body.classList.add('fullscreen-mode');
+        DOM.stage.setAttribute('aria-label', '写真');
+        showButtonTemporarily();
+    }
+
+    function exitFullscreen() {
+        document.body.classList.remove('fullscreen-mode');
+        DOM.stage.setAttribute('aria-label', '全画面で表示');
+        if (hideButtonTimer) clearTimeout(hideButtonTimer);
+    }
+
+    let touchStart = null;
+    let lastSwipeAt = 0;
+    DOM.stage.addEventListener('touchstart', (event) => {
+        const touch = event.touches[0];
+        touchStart = { x: touch.clientX, y: touch.clientY };
+    }, { passive: true });
+    DOM.stage.addEventListener('touchend', (event) => {
+        if (!touchStart) return;
+        const touch = event.changedTouches[0];
+        const dx = touch.clientX - touchStart.x;
+        const dy = touch.clientY - touchStart.y;
+        touchStart = null;
+        if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+            lastSwipeAt = Date.now();
+            stopSlideshow();
+            showAt(currentIndex + (dx < 0 ? 1 : -1));
+        }
+    });
+
+    DOM.stage.addEventListener('click', () => {
+        if (Date.now() - lastSwipeAt < 400) return; // スワイプ直後に発生するクリックは無視する
+        isFullscreen() ? showButtonTemporarily() : enterFullscreen();
+    });
+    DOM.stage.addEventListener('keydown', (event) => {
+        if ((event.key === 'Enter' || event.key === ' ') && !isFullscreen()) {
+            event.preventDefault();
+            enterFullscreen();
+        }
+    });
+    DOM.exitFullscreenBtn.addEventListener('click', exitFullscreen);
+
+    document.addEventListener('keydown', (event) => {
+        if (document.querySelector('dialog[open]') || isTypingTarget(event.target) || records.length === 0) return;
+        if (isFullscreen()) showButtonTemporarily();
+        switch (event.key) {
+            case 'ArrowRight':
+                stopSlideshow();
+                showAt(currentIndex + 1);
+                break;
+            case 'ArrowLeft':
+                stopSlideshow();
+                showAt(currentIndex - 1);
+                break;
+            case 'Escape':
+                exitFullscreen();
+                break;
+        }
+    });
+
+    // -----------------------------------------------------------------
+    // 写真の追加
+    // -----------------------------------------------------------------
+    let previewUrls = [];
+
+    function clearAddPreview() {
+        previewUrls.forEach((url) => URL.revokeObjectURL(url));
+        previewUrls = [];
+        DOM.addPreview.replaceChildren();
+    }
 
     /** 撮影日（EXIF）→ ファイル更新日 → 今日 の順で日付を決める */
     async function detectPhotoDate(file) {
@@ -355,163 +616,224 @@ window.onload = async function() {
         return formatDate(file.lastModified ? new Date(file.lastModified) : new Date());
     }
 
-    // --- フルスクリーン制御 ---
-    let hideButtonTimer = null;
+    document.querySelectorAll('.add-photo-button').forEach((button) => {
+        button.addEventListener('click', () => {
+            stopSlideshow();
+            DOM.imageInput.click();
+        });
+    });
 
-    function showButtonTemporarily() {
-        DOM.exitFullscreenBtn.classList.remove('hidden');
-        if (hideButtonTimer) clearTimeout(hideButtonTimer);
-        // iOS Safari等でのタップイベント考慮: 3秒後に閉じるボタンを隠す
-        hideButtonTimer = setTimeout(() => {
-            DOM.exitFullscreenBtn.classList.add('hidden');
-        }, 3000); 
+    DOM.imageInput.addEventListener('change', async () => {
+        const files = Array.from(DOM.imageInput.files);
+        if (files.length === 0) return;
+
+        clearAddPreview();
+        const shown = files.slice(0, 5);
+        for (const file of shown) {
+            const img = document.createElement('img');
+            img.alt = '';
+            const url = URL.createObjectURL(file);
+            previewUrls.push(url);
+            img.src = url;
+            DOM.addPreview.append(img);
+        }
+        if (files.length > shown.length) {
+            const more = document.createElement('div');
+            more.className = 'more';
+            more.textContent = `+${files.length - shown.length}`;
+            DOM.addPreview.append(more);
+        }
+
+        const multiple = files.length > 1;
+        DOM.dateGroup.hidden = multiple;
+        DOM.dateInput.required = !multiple;
+        DOM.multiDateNote.hidden = !multiple;
+        DOM.addSaveButton.textContent = multiple ? `${files.length}枚を保存` : '保存する';
+        DOM.memoInput.value = '';
+        DOM.dateInput.value = multiple ? '' : await detectPhotoDate(files[0]);
+        DOM.addDialog.showModal();
+    });
+
+    function resetAddForm() {
+        DOM.imageInput.value = '';
+        clearAddPreview();
     }
 
-    DOM.mainImage.addEventListener('click', () => {
-        if (records.length === 0) return;
-        document.body.classList.add('fullscreen-mode');
-        showButtonTemporarily();
+    function closeAddDialog() {
+        DOM.addDialog.close();
+        resetAddForm();
+    }
+
+    DOM.addCancelButton.addEventListener('click', closeAddDialog);
+    // Escキーで閉じた場合。close イベントは遅れて届くことがあるので、開き直していたら何もしない
+    DOM.addDialog.addEventListener('close', () => {
+        if (!DOM.addDialog.open) resetAddForm();
     });
 
-    DOM.exitFullscreenBtn.addEventListener('click', () => {
-        document.body.classList.remove('fullscreen-mode');
-        if (hideButtonTimer) clearTimeout(hideButtonTimer);
-    });
-    
-    // フルスクリーン中のタップ/クリックでUIを表示
-    const handleFullscreenInteraction = () => {
-        if (document.body.classList.contains('fullscreen-mode')) {
-            showButtonTemporarily();
-        }
-    };
-    document.addEventListener('click', handleFullscreenInteraction);
-    document.addEventListener('touchstart', handleFullscreenInteraction);
-
-    // キーボードショートカット
-    document.addEventListener('keydown', (e) => {
-        if (!document.body.classList.contains('fullscreen-mode')) return;
-        
-        showButtonTemporarily();
-        
-        switch(e.key) {
-            case 'ArrowRight':
-                stopSlideshow(); 
-                showNextRecord();
-                break;
-            case 'ArrowLeft':
-                stopSlideshow();
-                currentIndex = (currentIndex - 1 + records.length) % records.length;
-                updateDisplay();
-                break;
-            case 'Escape':
-                document.body.classList.remove('fullscreen-mode');
-                break;
-        }
-    });
-
-    // --- コントロールボタン群 ---
-    DOM.nextButton.addEventListener('click', () => { stopSlideshow(); showNextRecord(); });
-    DOM.prevButton.addEventListener('click', () => {
-        stopSlideshow(); 
-        if (records.length === 0) return; 
-        currentIndex = (currentIndex - 1 + records.length) % records.length;
-        updateDisplay();
-    });
-    
-    DOM.playPauseButton.addEventListener('click', () => {
-        slideInterval === null ? startSlideshow() : stopSlideshow();
-    });
-
-    DOM.plus05sButton.addEventListener('click', () => { updateTimeInput(0.5); stopSlideshow(); });
-    DOM.minus05sButton.addEventListener('click', () => { updateTimeInput(-0.5); stopSlideshow(); });
-    
-    // --- データ削除 ---
-    DOM.deleteButton.addEventListener('click', async () => {
-        if (records.length === 0) return;
-        const currentRecord = records[currentIndex];
-        
-        if (!confirm(`日付: ${currentRecord.date}\nこの記録を削除しますか？`)) return;
-
-        try {
-            await deleteRecordFromDB(currentRecord.id);
-            records.splice(currentIndex, 1);
-            if (records.length <= 1) stopSlideshow();
-            updateDisplay();
-        } catch (e) {
-            alert('削除失敗: ' + e);
-        }
-    });
-
-    DOM.deleteAllButton.addEventListener('click', async () => {
-        if (records.length === 0) return;
-        if (!confirm('【警告】保存されている全てのデータを削除しますか？')) return;
-
-        try {
-            await clearAllRecordsInDB();
-            stopSlideshow();
-            records = [];
-            currentIndex = 0;
-            updateDisplay();
-        } catch (e) {
-            alert('全削除に失敗しました: ' + e);
-        }
-    });
-
-    // --- データ保存 (File API & Promise) ---
     DOM.recordForm.addEventListener('submit', async (event) => {
-        event.preventDefault(); 
-        
-        const inputFiles = DOM.imageInput.files;
+        event.preventDefault();
+        const files = Array.from(DOM.imageInput.files);
+        if (files.length === 0) return;
+
         const memo = DOM.memoInput.value;
-        const manualDate = DOM.dateInput.value; 
-
-        if (inputFiles.length === 0) {
-            alert('画像を選択してください。');
-            return;
-        }
-
-        const saveBtn = DOM.recordForm.querySelector('.save-button');
-        const originalBtnText = saveBtn.textContent;
-        saveBtn.textContent = '保存中...';
-        saveBtn.disabled = true;
+        const manualDate = DOM.dateInput.value;
+        const saveText = DOM.addSaveButton.textContent;
+        DOM.addSaveButton.textContent = '保存中...';
+        DOM.addSaveButton.disabled = true;
 
         try {
             // 1枚ならフォームの日付（手で直せる）、複数なら写真ごとの撮影日を使う
-            const files = Array.from(inputFiles);
+            let lastAdded = null;
             for (const file of files) {
                 const date = files.length > 1 ? await detectPhotoDate(file) : manualDate;
                 const record = { image: file, date, memo };
                 record.id = await addRecordToDB(record);
                 records.push(record);
+                lastAdded = record;
             }
-
             records.sort(compareRecords);
-            currentIndex = records.length - 1;
-            updateDisplay();
+            currentIndex = records.indexOf(lastAdded);
+            renderAll();
             requestPersistentStorage();
-
-            DOM.recordForm.reset();
-            DOM.dateInput.value = formatDate(new Date());
-
+            closeAddDialog();
         } catch (error) {
             console.error('Data Save Error:', error);
-            alert('保存エラー: ' + error);
+            alert('保存に失敗しました: ' + error);
         } finally {
-            saveBtn.textContent = originalBtnText;
-            saveBtn.disabled = false;
+            DOM.addSaveButton.textContent = saveText;
+            DOM.addSaveButton.disabled = false;
         }
     });
 
-    // --- バックアップ ---
-    DOM.backupButton.addEventListener('click', async () => {
+    // -----------------------------------------------------------------
+    // 記録の編集・削除
+    // -----------------------------------------------------------------
+    DOM.editButton.addEventListener('click', () => {
+        if (records.length === 0) return;
+        stopSlideshow();
+        const record = records[currentIndex];
+        DOM.editDateInput.value = record.date;
+        DOM.editMemoInput.value = record.memo || '';
+        DOM.editDialog.showModal();
+    });
+
+    DOM.editCancelButton.addEventListener('click', () => DOM.editDialog.close());
+
+    DOM.editForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const record = records[currentIndex];
+        const updated = { ...record, date: DOM.editDateInput.value, memo: DOM.editMemoInput.value };
+        try {
+            await putRecordToDB(updated);
+            records[currentIndex] = updated;
+            records.sort(compareRecords);
+            currentIndex = records.indexOf(updated);
+            renderAll();
+            DOM.editDialog.close();
+        } catch (error) {
+            console.error('Edit Error:', error);
+            alert('保存に失敗しました: ' + error);
+        }
+    });
+
+    DOM.deleteButton.addEventListener('click', async () => {
+        const record = records[currentIndex];
+        if (!confirm(`${record.date} の記録を削除しますか？\nこの操作は取り消せません。`)) return;
+        try {
+            await deleteRecordFromDB(record.id);
+            releaseThumbnail(record.id);
+            records.splice(currentIndex, 1);
+            if (records.length <= 1) stopSlideshow();
+            DOM.editDialog.close();
+            renderAll();
+        } catch (error) {
+            alert('削除に失敗しました: ' + error);
+        }
+    });
+
+    // -----------------------------------------------------------------
+    // サンプル
+    // -----------------------------------------------------------------
+    async function addSamples(button) {
+        const originalText = button.textContent;
+        button.disabled = true;
+        button.textContent = '準備中…';
+        try {
+            const samples = await EvoluSample.createSampleRecords();
+            for (const sample of samples) {
+                sample.id = await addRecordToDB(sample);
+                records.push(sample);
+            }
+            records.sort(compareRecords);
+            currentIndex = records.indexOf(samples[samples.length - 1]);
+            renderAll();
+        } catch (error) {
+            console.error('Sample Error:', error);
+            alert('サンプルを作成できませんでした: ' + error);
+        } finally {
+            button.textContent = originalText;
+            button.disabled = false;
+        }
+    }
+
+    DOM.sampleButton.addEventListener('click', () => addSamples(DOM.sampleButton));
+    DOM.menuSampleButton.addEventListener('click', async () => {
+        DOM.menuDialog.close();
+        await addSamples(DOM.menuSampleButton);
+    });
+
+    DOM.removeSampleButton.addEventListener('click', async () => {
+        const samples = records.filter((record) => record.sample);
+        try {
+            for (const sample of samples) {
+                await deleteRecordFromDB(sample.id);
+                releaseThumbnail(sample.id);
+            }
+            records = records.filter((record) => !record.sample);
+            currentIndex = records.length - 1;
+            renderAll();
+        } catch (error) {
+            alert('サンプルを消せませんでした: ' + error);
+        }
+    });
+
+    // -----------------------------------------------------------------
+    // メニュー（データ管理）
+    // -----------------------------------------------------------------
+    DOM.menuButton.addEventListener('click', () => {
+        stopSlideshow();
+        DOM.menuDialog.showModal();
+    });
+    DOM.menuCloseButton.addEventListener('click', () => DOM.menuDialog.close());
+
+    DOM.deleteAllButton.addEventListener('click', async () => {
         if (records.length === 0) {
+            alert('削除する記録はありません。');
+            return;
+        }
+        if (!confirm(`すべての記録（${records.length}件）を削除しますか？\nこの操作は取り消せません。`)) return;
+        try {
+            await clearAllRecordsInDB();
+            records.forEach((record) => releaseThumbnail(record.id));
+            records = [];
+            currentIndex = 0;
+            DOM.menuDialog.close();
+            renderAll();
+        } catch (error) {
+            alert('全削除に失敗しました: ' + error);
+        }
+    });
+
+    DOM.backupButton.addEventListener('click', async () => {
+        const ownRecords = records.filter((record) => !record.sample);
+        if (ownRecords.length === 0) {
             alert('バックアップする記録がありません。');
             return;
         }
         const originalText = DOM.backupButton.textContent;
         DOM.backupButton.disabled = true;
         try {
-            const blobRecords = records.map((record) => (
+            const blobRecords = ownRecords.map((record) => (
                 typeof record.image === 'string' ? { ...record, image: dataUrlToBlob(record.image) } : record
             ));
             const zip = await EvoluBackup.createBackup(blobRecords, (done, total) => {
@@ -552,8 +874,9 @@ window.onload = async function() {
             }
             records.sort(compareRecords);
             currentIndex = Math.max(records.length - 1, 0);
-            updateDisplay();
+            renderAll();
             requestPersistentStorage();
+            DOM.menuDialog.close();
             alert(`${added}件を復元しました。（重複 ${restored.length - added}件はスキップ）`);
         } catch (error) {
             console.error('Restore Error:', error);
@@ -564,7 +887,9 @@ window.onload = async function() {
         }
     });
 
-    // --- 動画の書き出し ---
+    // -----------------------------------------------------------------
+    // 動画の書き出し
+    // -----------------------------------------------------------------
     let videoAbort = null;
     let videoResult = null;
     let videoUrl = null;
@@ -596,13 +921,9 @@ window.onload = async function() {
     }
 
     DOM.createVideoButton.addEventListener('click', () => {
-        if (records.length === 0) {
-            alert('先に写真を記録してください。');
-            return;
-        }
+        if (records.length === 0) return;
         stopSlideshow();
-        const seconds = parseFloat(DOM.timeInput.value);
-        DOM.videoSeconds.value = seconds >= 0.1 ? Math.min(seconds, 10).toFixed(1) : '1.0';
+        DOM.videoSeconds.value = parseFloat(DOM.timeInput.value).toFixed(1);
         updateVideoSummary();
         showVideoView('options');
         DOM.videoDialog.showModal();
@@ -610,8 +931,13 @@ window.onload = async function() {
 
     DOM.videoSeconds.addEventListener('input', updateVideoSummary);
     DOM.videoEnding.addEventListener('change', updateVideoSummary);
-    DOM.videoCloseButton.addEventListener('click', () => DOM.videoDialog.close());
-    DOM.videoDoneButton.addEventListener('click', () => DOM.videoDialog.close());
+    function closeVideoDialog() {
+        DOM.videoDialog.close();
+        clearVideoResult();
+    }
+
+    DOM.videoCloseButton.addEventListener('click', closeVideoDialog);
+    DOM.videoDoneButton.addEventListener('click', closeVideoDialog);
     DOM.videoCancelButton.addEventListener('click', () => { if (videoAbort) videoAbort.abort(); });
 
     DOM.videoRetryButton.addEventListener('click', () => {
@@ -627,7 +953,9 @@ window.onload = async function() {
         }
     });
 
-    DOM.videoDialog.addEventListener('close', clearVideoResult);
+    DOM.videoDialog.addEventListener('close', () => {
+        if (!DOM.videoDialog.open) clearVideoResult();
+    });
 
     DOM.videoStartButton.addEventListener('click', async () => {
         const secondsPerPhoto = parseFloat(DOM.videoSeconds.value);
@@ -681,4 +1009,21 @@ window.onload = async function() {
         const filename = `evolu-${formatDate(new Date())}.${videoResult.extension}`;
         await saveFile(videoResult.blob, filename);
     });
+
+    // -----------------------------------------------------------------
+    // DB接続と初期データロード（すべての処理を定義したあとに行う）
+    // -----------------------------------------------------------------
+    try {
+        await openDB();
+        await migrateLegacyRecords((done, total) => {
+            DOM.viewerSection.hidden = false;
+            DOM.recordMemo.textContent = `データを最適化しています… ${done} / ${total}`;
+        });
+        records = await getAllRecordsFromDB();
+        currentIndex = records.length > 0 ? records.length - 1 : 0;
+        renderAll();
+    } catch (error) {
+        console.error('Initialization Error:', error);
+        alert('初期化エラー: ' + error);
+    }
 };

@@ -1,5 +1,5 @@
 // 配信ファイルの構成を変えたときは番号を上げる（古いキャッシュは activate で削除される）
-const CACHE_NAME = 'evolu-v2';
+const CACHE_NAME = 'evolu-v3';
 const NETWORK_TIMEOUT_MS = 3000;
 const urlsToCache = [
   './',
@@ -9,6 +9,7 @@ const urlsToCache = [
   './exif.js',
   './backup.js',
   './video.js',
+  './sample.js',
   './vendor/mediabunny.min.mjs',
   './manifest.json',
   './icon-192.png',
